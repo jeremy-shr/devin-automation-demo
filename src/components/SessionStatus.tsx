@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { ConfidenceBadge } from './ConfidenceBadge';
+import { ScopeSummary } from './ScopeSummary';
+import { RawJsonPanel } from './RawJsonPanel';
 
 interface SessionStatusData {
   session_id: string;
@@ -17,6 +20,13 @@ interface SessionStatusProps {
   sessionId: string;
   type: 'scope' | 'execute';
   onOutput?: (output: Record<string, unknown> | null) => void;
+}
+
+function getConfidenceScore(output: Record<string, unknown> | null): number | null {
+  if (!output || typeof output.confidence_score !== 'number') {
+    return null;
+  }
+  return output.confidence_score;
 }
 
 const TERMINAL_STATUSES = ['finished', 'failed', 'cancelled', 'expired', 'blocked'];
@@ -104,13 +114,24 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
     );
   }
 
+  const confidenceScore = type === 'scope' ? getConfidenceScore(session.structured_output) : null;
+  const hasValidUrl = session.url && session.url.trim() !== '';
+
   return (
     <div className="session-status">
       <div className="session-header">
         <span className={`status-badge ${getStatusColor(session.status_enum)}`}>
           {session.status_enum}
         </span>
-        <span className="session-type">{type === 'scope' ? '🔍 Scope' : '🚀 Execute'}</span>
+        <span className="session-type">
+          {type === 'scope' ? '🔍 Scope' : '🚀 Execute'}
+          {confidenceScore !== null && (
+            <>
+              {' '}
+              <ConfidenceBadge score={confidenceScore} size="small" />
+            </>
+          )}
+        </span>
         {isPolling && session.status_enum !== 'finished' && (
           <span className="polling-indicator" title="Auto-refreshing">
             ⟳
@@ -118,14 +139,21 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
         )}
       </div>
       
-      <a 
-        href={session.url} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="session-link"
-      >
-        View in Devin →
-      </a>
+      {hasValidUrl ? (
+        <a 
+          href={session.url} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="session-link"
+        >
+          View in Devin →
+        </a>
+      ) : (
+        <span className="session-link-disabled">
+          View in Devin
+          <span className="session-link-helper">Devin URL unavailable</span>
+        </span>
+      )}
       
       {session.pull_request_url && (
         <a 
@@ -139,10 +167,11 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
       )}
       
       {session.structured_output && (
-        <div className="structured-output">
-          <h4>Structured Output</h4>
-          <pre>{JSON.stringify(session.structured_output, null, 2)}</pre>
-        </div>
+        type === 'scope' ? (
+          <ScopeSummary data={session.structured_output} />
+        ) : (
+          <RawJsonPanel data={session.structured_output} title="Execution Output" />
+        )
       )}
     </div>
   );
