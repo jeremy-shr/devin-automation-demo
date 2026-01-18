@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { SessionStatus } from './SessionStatus';
+import { IssueDetailsModal } from './IssueDetailsModal';
 
 interface Issue {
   number: number;
@@ -11,6 +12,7 @@ interface Issue {
   html_url: string;
   updated_at: string;
   labels: Array<{ name: string; color: string }>;
+  state?: string;
 }
 
 interface SessionInfo {
@@ -32,6 +34,7 @@ export function IssueRow({ issue }: IssueRowProps) {
   const [isLoading, setIsLoading] = useState<'scope' | 'execute' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scopeOutput, setScopeOutput] = useState<Record<string, unknown> | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Load persisted sessions on mount
   useEffect(() => {
@@ -165,33 +168,40 @@ export function IssueRow({ issue }: IssueRowProps) {
           </div>
         </div>
         
-        <div className="issue-actions">
-          <button
-            onClick={handleScope}
-            disabled={isLoading !== null}
-            className="action-button scope-button"
-          >
-            {isLoading === 'scope' ? 'Scoping...' : hasScopeSession ? 'Re-scope' : '🔍 Scope'}
-          </button>
+                <div className="issue-actions">
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="action-button view-button"
+                  >
+                    View
+                  </button>
           
-          <button
-            onClick={handleExecute}
-            disabled={isLoading !== null || !hasScopeSession}
-            className={`action-button execute-button ${!hasScopeSession ? 'disabled' : ''}`}
-            title={!hasScopeSession ? 'Scope the issue first' : isReadyToExecute ? 'Execute the action plan' : 'Waiting for scope to complete'}
-          >
-            {isLoading === 'execute' ? 'Starting...' : hasExecuteSession ? 'Re-execute' : '🚀 Execute'}
-          </button>
+                  <button
+                    onClick={handleScope}
+                    disabled={isLoading !== null}
+                    className="action-button scope-button"
+                  >
+                    {isLoading === 'scope' ? 'Scoping...' : hasScopeSession ? 'Re-scope' : '🔍 Scope'}
+                  </button>
           
-          {sessions.length > 0 && (
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="toggle-button"
-            >
-              {isExpanded ? '▲ Hide' : '▼ Show'} Sessions
-            </button>
-          )}
-        </div>
+                  <button
+                    onClick={handleExecute}
+                    disabled={isLoading !== null || !hasScopeSession}
+                    className={`action-button execute-button ${!hasScopeSession ? 'disabled' : ''}`}
+                    title={!hasScopeSession ? 'Scope the issue first' : isReadyToExecute ? 'Execute the action plan' : 'Waiting for scope to complete'}
+                  >
+                    {isLoading === 'execute' ? 'Starting...' : hasExecuteSession ? 'Re-execute' : '🚀 Execute'}
+                  </button>
+          
+                  {sessions.length > 0 && (
+                    <button
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="toggle-button"
+                    >
+                      {isExpanded ? '▲ Hide' : '▼ Show'} Sessions
+                    </button>
+                  )}
+                </div>
       </div>
       
       {error && (
@@ -213,6 +223,12 @@ export function IssueRow({ issue }: IssueRowProps) {
           ))}
         </div>
       )}
+
+      <IssueDetailsModal
+        issue={issue}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 }
