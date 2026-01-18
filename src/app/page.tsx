@@ -11,6 +11,7 @@ interface Issue {
   html_url: string;
   updated_at: string;
   labels: Array<{ name: string; color: string }>;
+  state: string;
 }
 
 interface ConfigStatus {
