@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { IssueRow } from '@/components/IssueRow';
 
 interface Issue {
@@ -27,6 +27,36 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configStatus] = useState<ConfigStatus | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState('');
+
+  const uniqueLabels = useMemo(() => {
+    const labelSet = new Set<string>();
+    issues.forEach(issue => {
+      issue.labels.forEach(label => labelSet.add(label.name));
+    });
+    return Array.from(labelSet).sort();
+  }, [issues]);
+
+  const filteredIssues = useMemo(() => {
+    return issues.filter(issue => {
+      const matchesSearch = searchQuery === '' || 
+        issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        issue.number.toString().includes(searchQuery);
+      
+      const matchesLabel = selectedLabel === '' ||
+        issue.labels.some(label => label.name === selectedLabel);
+      
+      return matchesSearch && matchesLabel;
+    });
+  }, [issues, searchQuery, selectedLabel]);
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setSelectedLabel('');
+  };
+
+  const hasActiveFilters = searchQuery !== '' || selectedLabel !== '';
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -118,12 +148,46 @@ export default function Home() {
           <div className="issues-list">
             <div className="issues-header">
               <span className="issues-count">
-                {issues.length} open issue{issues.length !== 1 ? 's' : ''}
+                {filteredIssues.length} of {issues.length} issue{issues.length !== 1 ? 's' : ''}
               </span>
+              <div className="filter-controls">
+                <input
+                  type="text"
+                  placeholder="Search by title or #number..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input"
+                />
+                <select
+                  value={selectedLabel}
+                  onChange={(e) => setSelectedLabel(e.target.value)}
+                  className="label-select"
+                >
+                  <option value="">All labels</option>
+                  {uniqueLabels.map(label => (
+                    <option key={label} value={label}>{label}</option>
+                  ))}
+                </select>
+                {hasActiveFilters && (
+                  <button onClick={clearFilters} className="clear-filters-button">
+                    Clear filters
+                  </button>
+                )}
+              </div>
             </div>
-            {issues.map(issue => (
-              <IssueRow key={issue.number} issue={issue} />
-            ))}
+            {filteredIssues.length === 0 ? (
+              <div className="empty-state">
+                <h3>No matching issues</h3>
+                <p>No issues match your current filters.</p>
+                <button onClick={clearFilters} className="retry-button">
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              filteredIssues.map(issue => (
+                <IssueRow key={issue.number} issue={issue} />
+              ))
+            )}
           </div>
         )}
       </main>
