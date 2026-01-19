@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { SessionStatus } from './SessionStatus';
 import { IssueModal } from './IssueModal';
+import { StatusStrip } from './StatusStrip';
 
 interface Issue {
   number: number;
@@ -218,6 +219,13 @@ export function IssueRow({ issue }: IssueRowProps) {
           <button onClick={() => setError(null)} className="dismiss-error">×</button>
         </div>
       )}
+
+      {/* Status Strip - Always visible when sessions exist */}
+      <StatusStrip
+        issueNumber={issue.number}
+        scopeSessionId={sessions.find(s => s.type === 'scope')?.sessionId || null}
+        executeSessionId={sessions.find(s => s.type === 'execute')?.sessionId || null}
+      />
       
       {isExpanded && sessions.length > 0 && (
         <div className="sessions-panel">
