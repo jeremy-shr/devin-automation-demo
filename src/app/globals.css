@@ -1307,6 +1307,93 @@ body {
   border-color: var(--accent-blue);
 }
 
+/* Polling warning and error states */
+.polling-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(210, 153, 34, 0.15);
+  border: 1px solid rgba(210, 153, 34, 0.3);
+  border-radius: 6px;
+  color: var(--accent-yellow);
+  font-size: 0.85rem;
+}
+
+.polling-warning-icon {
+  animation: spin 2s linear infinite;
+}
+
+.polling-warning-text {
+  font-weight: 500;
+}
+
+.polling-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 6px;
+  color: var(--accent-red);
+  font-size: 0.85rem;
+}
+
+.polling-error-text {
+  font-weight: 500;
+}
+
+.polling-retry-button {
+  background: var(--accent-red);
+  border: none;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.polling-retry-button:hover {
+  opacity: 0.9;
+}
+
+/* Status pill degraded/failed state modifiers */
+.status-pill-degraded {
+  opacity: 0.8;
+  border-style: dashed;
+}
+
+.status-pill.status-pill-failed {
+  opacity: 0.7;
+}
+
+.status-pill-warning {
+  margin-right: 0.25rem;
+  animation: spin 2s linear infinite;
+  color: var(--accent-yellow);
+}
+
+.status-pill-error {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 0.25rem;
+  background: var(--accent-red);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .container {

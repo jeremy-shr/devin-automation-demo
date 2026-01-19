@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { ScopeSummary } from './ScopeSummary';
 import { RawJsonPanel } from './RawJsonPanel';
 import { deriveWorkflowStatus, getWorkflowKindClass } from '@/lib/workflowStatus';
+import { usePollingWithBackoff } from '@/lib/usePollingWithBackoff';
 
 interface SessionStatusData {
   session_id: string;
@@ -31,61 +32,65 @@ function getConfidenceScore(output: Record<string, unknown> | null): number | nu
 }
 
 const TERMINAL_STATUSES = ['finished', 'failed', 'cancelled', 'expired', 'blocked'];
-const POLL_INTERVAL = 15000; // 15 seconds
+
+// Custom error class to carry HTTP status
+class FetchError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'FetchError';
+  }
+}
 
 export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps) {
-  const [session, setSession] = useState<SessionStatusData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
-
-  const fetchSession = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch session');
-      }
-      
-      setSession(data);
-      setError(null);
-      
-      if (onOutput && data.structured_output) {
-        onOutput(data.structured_output);
-      }
-      
-      // Stop polling if session is in terminal state
-      if (TERMINAL_STATUSES.includes(data.status_enum)) {
-        setIsPolling(false);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch session');
-    }
-  }, [sessionId, onOutput]);
-
-  useEffect(() => {
-    // Initial fetch
-    fetchSession();
+  // Fetch function for the polling hook
+  const fetchSession = async (): Promise<{ data: SessionStatusData; status: number }> => {
+    const response = await fetch(`/api/sessions/${sessionId}`);
+    const data = await response.json();
     
-    // Set up polling
-    if (isPolling) {
-      const interval = setInterval(fetchSession, POLL_INTERVAL);
-      return () => clearInterval(interval);
+    if (!response.ok) {
+      throw new FetchError(data.error || 'Failed to fetch session', response.status);
     }
-  }, [fetchSession, isPolling]);
+    
+    return { data, status: response.status };
+  };
 
-  if (error) {
+  // Determine if polling should stop (terminal state reached)
+  const shouldStopPolling = (data: SessionStatusData | null): boolean => {
+    if (!data) return false;
+    return TERMINAL_STATUSES.includes(data.status_enum);
+  };
+
+  const {
+    data: session,
+    pollingState,
+    isPolling,
+    retryInSeconds,
+    retry,
+  } = usePollingWithBackoff<SessionStatusData>(fetchSession, shouldStopPolling);
+
+  // Notify parent of output changes
+  useEffect(() => {
+    if (onOutput && session?.structured_output) {
+      onOutput(session.structured_output);
+    }
+  }, [session?.structured_output, onOutput]);
+
+  // Show failed state with retry button when polling has failed completely
+  if (pollingState === 'failed' && !session) {
     return (
       <div className="session-status error">
         <div className="error-badge">Error</div>
-        <p className="error-message">{error}</p>
-        <button onClick={fetchSession} className="retry-button">
-          Retry
+        <p className="error-message">Unable to refresh session status. Please retry.</p>
+        <button onClick={retry} className="retry-button">
+          Retry now
         </button>
       </div>
     );
   }
 
+  // Show loading state only on initial load
   if (!session) {
     return (
       <div className="session-status loading">
@@ -104,11 +109,32 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
   );
 
   const confidenceScore = type === 'scope' ? getConfidenceScore(session.structured_output) : null;
-  const hasValidUrl = session.url && session.url.trim() !== '';
   const isActive = workflowStatus.kind === 'active';
 
   return (
     <div className="session-status">
+      {/* Degraded state warning - reconnecting */}
+      {pollingState === 'degraded' && retryInSeconds !== null && (
+        <div className="polling-warning">
+          <span className="polling-warning-icon">⟳</span>
+          <span className="polling-warning-text">
+            Reconnecting… (retrying in {retryInSeconds}s)
+          </span>
+        </div>
+      )}
+      
+      {/* Failed state warning with retry button */}
+      {pollingState === 'failed' && session && (
+        <div className="polling-error">
+          <span className="polling-error-text">
+            Unable to refresh session status. Please retry.
+          </span>
+          <button onClick={retry} className="polling-retry-button">
+            Retry now
+          </button>
+        </div>
+      )}
+
       <div className="session-header">
         <span className={`status-badge status-badge-${getWorkflowKindClass(workflowStatus.kind)}`}>
           {isActive && <span className="status-badge-spinner" />}
@@ -124,7 +150,7 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
             </>
           )}
         </span>
-        {isPolling && !workflowStatus.isTerminal && (
+        {isPolling && !workflowStatus.isTerminal && pollingState === 'normal' && (
           <span className="polling-indicator" title="Auto-refreshing">
             ⟳
           </span>

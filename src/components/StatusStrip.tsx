@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { deriveWorkflowStatus, getWorkflowKindClass, WorkflowStatus } from '@/lib/workflowStatus';
+import { deriveWorkflowStatus, getWorkflowKindClass } from '@/lib/workflowStatus';
+import { usePollingWithBackoff, PollingState } from '@/lib/usePollingWithBackoff';
 
 interface SessionStatusData {
   session_id: string;
@@ -18,7 +19,6 @@ interface StatusStripProps {
 }
 
 const TERMINAL_STATUSES = ['finished', 'failed', 'cancelled', 'expired', 'blocked'];
-const POLL_INTERVAL = 15000;
 
 function getRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -34,57 +34,78 @@ function getRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+// Custom error class to carry HTTP status
+class FetchError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+    this.name = 'FetchError';
+  }
+}
+
 interface SessionPollerResult {
   data: SessionStatusData | null;
   isPolling: boolean;
+  pollingState: PollingState;
+  retryInSeconds: number | null;
+  retry: () => void;
 }
 
 function useSessionPoller(sessionId: string): SessionPollerResult {
-  const [data, setData] = useState<SessionStatusData | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
-
-  const fetchSession = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
-      if (!response.ok) return;
-      const result = await response.json();
-      setData(result);
-      if (TERMINAL_STATUSES.includes(result.status_enum)) {
-        setIsPolling(false);
-      }
-    } catch {
-      // Silently fail on fetch errors
+  // Fetch function for the polling hook
+  const fetchSession = async (): Promise<{ data: SessionStatusData; status: number }> => {
+    const response = await fetch(`/api/sessions/${sessionId}`);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new FetchError(data.error || 'Failed to fetch session', response.status);
     }
-  }, [sessionId]);
+    
+    return { data, status: response.status };
+  };
 
-  useEffect(() => {
-    // Initial fetch
-    fetchSession();
+  // Determine if polling should stop (terminal state reached)
+  const shouldStopPolling = (data: SessionStatusData | null): boolean => {
+    if (!data) return false;
+    return TERMINAL_STATUSES.includes(data.status_enum);
+  };
 
-    // Set up polling
-    if (isPolling) {
-      const interval = setInterval(fetchSession, POLL_INTERVAL);
-      return () => clearInterval(interval);
-    }
-  }, [fetchSession, isPolling]);
+  const {
+    data,
+    pollingState,
+    isPolling,
+    retryInSeconds,
+    retry,
+  } = usePollingWithBackoff<SessionStatusData>(fetchSession, shouldStopPolling);
 
-  return { data, isPolling };
+  return { data, isPolling, pollingState, retryInSeconds, retry };
+}
+
+interface WorkflowStatusPillProps {
+  sessionId: string;
+  type: 'scope' | 'execute';
+  onDataChange: (data: SessionStatusData | null) => void;
+  onPollingStateChange?: (state: PollingState, retryInSeconds: number | null) => void;
 }
 
 function WorkflowStatusPill({ 
   sessionId, 
   type,
-  onDataChange 
-}: { 
-  sessionId: string; 
-  type: 'scope' | 'execute';
-  onDataChange: (data: SessionStatusData | null) => void;
-}) {
-  const { data, isPolling } = useSessionPoller(sessionId);
+  onDataChange,
+  onPollingStateChange,
+}: WorkflowStatusPillProps) {
+  const { data, isPolling, pollingState, retryInSeconds } = useSessionPoller(sessionId);
   
   useEffect(() => {
     onDataChange(data);
   }, [data, onDataChange]);
+
+  useEffect(() => {
+    if (onPollingStateChange) {
+      onPollingStateChange(pollingState, retryInSeconds);
+    }
+  }, [pollingState, retryInSeconds, onPollingStateChange]);
 
   // Derive workflow status from raw data
   const workflowStatus = deriveWorkflowStatus(
@@ -94,17 +115,33 @@ function WorkflowStatusPill({
     data?.pull_request_url
   );
 
-  const isActive = workflowStatus.kind === 'active' && isPolling;
+  const isActive = workflowStatus.kind === 'active' && isPolling && pollingState === 'normal';
+  const isDegraded = pollingState === 'degraded';
+  const isFailed = pollingState === 'failed';
   const typeLabel = type === 'scope' ? 'Scope' : 'Execute';
 
+  // Add degraded/failed class modifier for styling
+  const pillClassName = [
+    'status-pill',
+    `status-pill-${getWorkflowKindClass(workflowStatus.kind)}`,
+    isDegraded && 'status-pill-degraded',
+    isFailed && 'status-pill-failed',
+  ].filter(Boolean).join(' ');
+
   return (
-    <span className={`status-pill status-pill-${getWorkflowKindClass(workflowStatus.kind)}`}>
+    <span className={pillClassName}>
       {isActive && (
         <span className="status-pill-spinner" />
       )}
+      {isDegraded && (
+        <span className="status-pill-warning" title={`Reconnecting… (retrying in ${retryInSeconds}s)`}>⟳</span>
+      )}
+      {isFailed && (
+        <span className="status-pill-error" title="Connection lost">!</span>
+      )}
       <span className="status-pill-type">{typeLabel}:</span>
       <span className="status-pill-status">{workflowStatus.label}</span>
-      {workflowStatus.needsAttention && (
+      {workflowStatus.needsAttention && !isDegraded && !isFailed && (
         <span className="status-pill-attention" title={workflowStatus.detail}>⚠</span>
       )}
     </span>
