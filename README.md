@@ -2,7 +2,7 @@
 
 A lightweight integration between GitHub Issues and Devin AI sessions for automated issue scoping and execution.
 
-![Dashboard Preview](./docs/dashboard-preview.png)
+Demo: https://www.loom.com/share/43e8159b79174438b4ea593eac70a061
 
 ## Overview
 
@@ -37,7 +37,7 @@ This application allows you to:
 
 ```bash
 # Clone or navigate to the project
-cd devin-automation
+cd devin-automation-demo
 
 # Install dependencies
 npm install
