@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { deriveWorkflowStatus, getWorkflowKindClass, WorkflowStatus } from '@/lib/workflowStatus';
+import { deriveWorkflowStatus, getWorkflowKindClass } from '@/lib/workflowStatus';
+import { usePollingWithBackoff, PollingState } from '@/lib/usePollingWithBackoff';
 
 interface SessionStatusData {
   session_id: string;
@@ -37,54 +38,58 @@ function getRelativeTime(dateString: string): string {
 interface SessionPollerResult {
   data: SessionStatusData | null;
   isPolling: boolean;
+  pollingState: PollingState;
+  retry: () => void;
 }
 
 function useSessionPoller(sessionId: string): SessionPollerResult {
   const [data, setData] = useState<SessionStatusData | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
 
-  const fetchSession = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}`);
-      if (!response.ok) return;
-      const result = await response.json();
-      setData(result);
-      if (TERMINAL_STATUSES.includes(result.status_enum)) {
-        setIsPolling(false);
-      }
-    } catch {
-      // Silently fail on fetch errors
-    }
+  const fetchFn = useCallback(() => {
+    return fetch(`/api/sessions/${sessionId}`);
   }, [sessionId]);
 
-  useEffect(() => {
-    // Initial fetch
-    fetchSession();
+  const handleSuccess = useCallback((result: SessionStatusData) => {
+    setData(result);
+  }, []);
 
-    // Set up polling
-    if (isPolling) {
-      const interval = setInterval(fetchSession, POLL_INTERVAL);
-      return () => clearInterval(interval);
-    }
-  }, [fetchSession, isPolling]);
+  const isTerminal = useCallback((result: SessionStatusData) => {
+    return TERMINAL_STATUSES.includes(result.status_enum);
+  }, []);
 
-  return { data, isPolling };
+  const { pollingState, isPolling, retry } = usePollingWithBackoff<SessionStatusData>({
+    fetchFn,
+    onSuccess: handleSuccess,
+    isTerminal,
+    normalInterval: POLL_INTERVAL,
+    maxFailures: 5,
+  });
+
+  return { data, isPolling, pollingState, retry };
+}
+
+interface WorkflowStatusPillProps {
+  sessionId: string;
+  type: 'scope' | 'execute';
+  onDataChange: (data: SessionStatusData | null) => void;
+  onPollingStateChange: (state: PollingState) => void;
 }
 
 function WorkflowStatusPill({ 
   sessionId, 
   type,
-  onDataChange 
-}: { 
-  sessionId: string; 
-  type: 'scope' | 'execute';
-  onDataChange: (data: SessionStatusData | null) => void;
-}) {
-  const { data, isPolling } = useSessionPoller(sessionId);
+  onDataChange,
+  onPollingStateChange,
+}: WorkflowStatusPillProps) {
+  const { data, isPolling, pollingState } = useSessionPoller(sessionId);
   
   useEffect(() => {
     onDataChange(data);
   }, [data, onDataChange]);
+
+  useEffect(() => {
+    onPollingStateChange(pollingState);
+  }, [pollingState, onPollingStateChange]);
 
   // Derive workflow status from raw data
   const workflowStatus = deriveWorkflowStatus(
@@ -111,6 +116,13 @@ function WorkflowStatusPill({
   );
 }
 
+const DEFAULT_POLLING_STATE: PollingState = {
+  isReconnecting: false,
+  isFailed: false,
+  failureCount: 0,
+  nextRetryIn: null,
+};
+
 export function StatusStrip({ 
   issueNumber, 
   scopeSessionId, 
@@ -118,6 +130,8 @@ export function StatusStrip({
 }: StatusStripProps) {
   const [scopeData, setScopeData] = useState<SessionStatusData | null>(null);
   const [executeData, setExecuteData] = useState<SessionStatusData | null>(null);
+  const [scopePollingState, setScopePollingState] = useState<PollingState>(DEFAULT_POLLING_STATE);
+  const [executePollingState, setExecutePollingState] = useState<PollingState>(DEFAULT_POLLING_STATE);
 
   const handleScopeDataChange = useCallback((data: SessionStatusData | null) => {
     setScopeData(data);
@@ -125,6 +139,14 @@ export function StatusStrip({
 
   const handleExecuteDataChange = useCallback((data: SessionStatusData | null) => {
     setExecuteData(data);
+  }, []);
+
+  const handleScopePollingStateChange = useCallback((state: PollingState) => {
+    setScopePollingState(state);
+  }, []);
+
+  const handleExecutePollingStateChange = useCallback((state: PollingState) => {
+    setExecutePollingState(state);
   }, []);
 
   const hasAnySessions = scopeSessionId || executeSessionId;
@@ -162,6 +184,7 @@ export function StatusStrip({
             sessionId={scopeSessionId}
             type="scope"
             onDataChange={handleScopeDataChange}
+            onPollingStateChange={handleScopePollingStateChange}
           />
         )}
         {executeSessionId && (
@@ -170,9 +193,16 @@ export function StatusStrip({
             sessionId={executeSessionId}
             type="execute"
             onDataChange={handleExecuteDataChange}
+            onPollingStateChange={handleExecutePollingStateChange}
           />
         )}
       </div>
+      
+      {(scopePollingState.isReconnecting || executePollingState.isReconnecting) && (
+        <div className="status-strip-reconnecting">
+          Reconnecting... (retrying in {scopePollingState.nextRetryIn || executePollingState.nextRetryIn}s)
+        </div>
+      )}
       
       {needsAttentionWorkflow && needsAttentionWorkflow.detail && (
         <div className="status-strip-attention">
