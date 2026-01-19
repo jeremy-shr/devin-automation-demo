@@ -257,6 +257,8 @@ The app handles common error scenarios:
 | `cancelled` | User cancelled |
 | `expired` | Session timed out |
 
+> **Note:** Scope sessions may report `blocked` status while awaiting execution approval. The dashboard UI maps this to **"Awaiting approval"** to distinguish it from execution sessions that genuinely need user input (shown as **"Needs input"**).
+
 ## Development
 
 ```bash

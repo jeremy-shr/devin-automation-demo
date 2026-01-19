@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { ScopeSummary } from './ScopeSummary';
 import { RawJsonPanel } from './RawJsonPanel';
+import { deriveWorkflowStatus, getWorkflowKindClass } from '@/lib/workflowStatus';
 
 interface SessionStatusData {
   session_id: string;
@@ -73,26 +74,6 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
     }
   }, [fetchSession, isPolling]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'running':
-        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'finished':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
-      case 'failed':
-      case 'cancelled':
-      case 'expired':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
-      case 'blocked':
-      case 'paused':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      default:
-        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    }
-  };
-
   if (error) {
     return (
       <div className="session-status error">
@@ -114,14 +95,25 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
     );
   }
 
+  // Derive workflow status from raw data
+  const workflowStatus = deriveWorkflowStatus(
+    type,
+    session.status_enum,
+    session.structured_output,
+    session.pull_request_url
+  );
+
   const confidenceScore = type === 'scope' ? getConfidenceScore(session.structured_output) : null;
   const hasValidUrl = session.url && session.url.trim() !== '';
+  const isActive = workflowStatus.kind === 'active';
 
   return (
     <div className="session-status">
       <div className="session-header">
-        <span className={`status-badge ${getStatusColor(session.status_enum)}`}>
-          {session.status_enum}
+        <span className={`status-badge status-badge-${getWorkflowKindClass(workflowStatus.kind)}`}>
+          {isActive && <span className="status-badge-spinner" />}
+          {workflowStatus.label}
+          {workflowStatus.needsAttention && <span className="status-badge-attention">⚠</span>}
         </span>
         <span className="session-type">
           {type === 'scope' ? '🔍 Scope' : '🚀 Execute'}
@@ -132,28 +124,27 @@ export function SessionStatus({ sessionId, type, onOutput }: SessionStatusProps)
             </>
           )}
         </span>
-        {isPolling && session.status_enum !== 'finished' && (
+        {isPolling && !workflowStatus.isTerminal && (
           <span className="polling-indicator" title="Auto-refreshing">
             ⟳
           </span>
         )}
       </div>
       
-      {hasValidUrl ? (
+      {workflowStatus.detail && (
+        <div className="session-detail">
+          {workflowStatus.detail}
+        </div>
+      )}
+      
         <a 
-          href={session.url} 
+          href={"https://app.devin.ai/sessions"} 
           target="_blank" 
           rel="noopener noreferrer"
           className="session-link"
         >
           View in Devin →
         </a>
-      ) : (
-        <span className="session-link-disabled">
-          View in Devin
-          <span className="session-link-helper">Devin URL unavailable</span>
-        </span>
-      )}
       
       {session.pull_request_url && (
         <a 

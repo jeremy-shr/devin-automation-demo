@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { deriveWorkflowStatus, getWorkflowKindClass, WorkflowStatus } from '@/lib/workflowStatus';
 
 interface SessionStatusData {
   session_id: string;
   status_enum: string;
   structured_output: Record<string, unknown> | null;
+  pull_request_url?: string | null;
   updated_at: string;
 }
 
@@ -15,7 +17,7 @@ interface StatusStripProps {
   executeSessionId: string | null;
 }
 
-const TERMINAL_STATUSES = ['finished', 'failed', 'cancelled', 'expired'];
+const TERMINAL_STATUSES = ['finished', 'failed', 'cancelled', 'expired', 'blocked'];
 const POLL_INTERVAL = 15000;
 
 function getRelativeTime(dateString: string): string {
@@ -32,27 +34,12 @@ function getRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-function getBlockingReason(output: Record<string, unknown> | null): string | null {
-  if (!output) return null;
-  
-  if (typeof output.blocking_issue === 'string' && output.blocking_issue) {
-    return output.blocking_issue;
-  }
-  if (typeof output.needs_input === 'string' && output.needs_input) {
-    return output.needs_input;
-  }
-  if (typeof output.current_task === 'string' && output.needs_human_input === true) {
-    return output.current_task;
-  }
-  return null;
-}
-
 interface SessionPollerResult {
   data: SessionStatusData | null;
   isPolling: boolean;
 }
 
-function SessionPoller({ sessionId }: { sessionId: string }): SessionPollerResult {
+function useSessionPoller(sessionId: string): SessionPollerResult {
   const [data, setData] = useState<SessionStatusData | null>(null);
   const [isPolling, setIsPolling] = useState(true);
 
@@ -84,27 +71,43 @@ function SessionPoller({ sessionId }: { sessionId: string }): SessionPollerResul
   return { data, isPolling };
 }
 
-function SessionStatusDisplay({ 
+function WorkflowStatusPill({ 
   sessionId, 
   type,
   onDataChange 
 }: { 
   sessionId: string; 
-  type: 'Scope' | 'Execute';
+  type: 'scope' | 'execute';
   onDataChange: (data: SessionStatusData | null) => void;
 }) {
-  const { data, isPolling } = SessionPoller({ sessionId });
+  const { data, isPolling } = useSessionPoller(sessionId);
   
   useEffect(() => {
     onDataChange(data);
   }, [data, onDataChange]);
-  
+
+  // Derive workflow status from raw data
+  const workflowStatus = deriveWorkflowStatus(
+    type,
+    data?.status_enum || null,
+    data?.structured_output || null,
+    data?.pull_request_url
+  );
+
+  const isActive = workflowStatus.kind === 'active' && isPolling;
+  const typeLabel = type === 'scope' ? 'Scope' : 'Execute';
+
   return (
-    <StatusPill 
-      type={type} 
-      status={data?.status_enum || 'loading'} 
-      isPolling={isPolling && !TERMINAL_STATUSES.includes(data?.status_enum || '')}
-    />
+    <span className={`status-pill status-pill-${getWorkflowKindClass(workflowStatus.kind)}`}>
+      {isActive && (
+        <span className="status-pill-spinner" />
+      )}
+      <span className="status-pill-type">{typeLabel}:</span>
+      <span className="status-pill-status">{workflowStatus.label}</span>
+      {workflowStatus.needsAttention && (
+        <span className="status-pill-attention" title={workflowStatus.detail}>⚠</span>
+      )}
+    </span>
   );
 }
 
@@ -127,14 +130,23 @@ export function StatusStrip({
   const hasAnySessions = scopeSessionId || executeSessionId;
   if (!hasAnySessions) return null;
 
-  const isBlocked = scopeData?.status_enum === 'blocked' || executeData?.status_enum === 'blocked';
-  const scopeBlockReason = scopeData?.status_enum === 'blocked' 
-    ? getBlockingReason(scopeData.structured_output) 
-    : null;
-  const executeBlockReason = executeData?.status_enum === 'blocked' 
-    ? getBlockingReason(executeData.structured_output) 
-    : null;
-  const blockReason = scopeBlockReason || executeBlockReason;
+  // Derive workflow statuses for context-aware messaging
+  const scopeWorkflow = scopeSessionId ? deriveWorkflowStatus(
+    'scope',
+    scopeData?.status_enum || null,
+    scopeData?.structured_output || null
+  ) : null;
+
+  const executeWorkflow = executeSessionId ? deriveWorkflowStatus(
+    'execute',
+    executeData?.status_enum || null,
+    executeData?.structured_output || null,
+    executeData?.pull_request_url
+  ) : null;
+
+  // Determine if we need to show attention message
+  const needsAttentionWorkflow = executeWorkflow?.needsAttention ? executeWorkflow : 
+    (scopeWorkflow?.needsAttention ? scopeWorkflow : null);
 
   const latestUpdate = [scopeData?.updated_at, executeData?.updated_at]
     .filter(Boolean)
@@ -145,32 +157,32 @@ export function StatusStrip({
     <div className="status-strip" data-issue={issueNumber}>
       <div className="status-strip-pills">
         {scopeSessionId && (
-          <SessionStatusDisplay 
+          <WorkflowStatusPill 
             key={scopeSessionId}
             sessionId={scopeSessionId}
-            type="Scope"
+            type="scope"
             onDataChange={handleScopeDataChange}
           />
         )}
         {executeSessionId && (
-          <SessionStatusDisplay 
+          <WorkflowStatusPill 
             key={executeSessionId}
             sessionId={executeSessionId}
-            type="Execute"
+            type="execute"
             onDataChange={handleExecuteDataChange}
           />
         )}
       </div>
       
-      {isBlocked && (
-        <div className="status-strip-blocked">
-          <span className="blocked-icon">!</span>
-          <span className="blocked-text">Blocked</span>
-          {blockReason && (
-            <span className="blocked-reason" title={blockReason}>
-              {blockReason.length > 50 ? blockReason.substring(0, 50) + '...' : blockReason}
-            </span>
-          )}
+      {needsAttentionWorkflow && needsAttentionWorkflow.detail && (
+        <div className="status-strip-attention">
+          <span className="attention-icon">⚠</span>
+          <span className="attention-text">{needsAttentionWorkflow.label}</span>
+          <span className="attention-detail" title={needsAttentionWorkflow.detail}>
+            {needsAttentionWorkflow.detail.length > 50 
+              ? needsAttentionWorkflow.detail.substring(0, 50) + '...' 
+              : needsAttentionWorkflow.detail}
+          </span>
         </div>
       )}
       
@@ -180,48 +192,5 @@ export function StatusStrip({
         </span>
       )}
     </div>
-  );
-}
-
-interface StatusPillProps {
-  type: 'Scope' | 'Execute';
-  status: string;
-  isPolling: boolean;
-}
-
-function StatusPill({ type, status, isPolling }: StatusPillProps) {
-  const getStatusClass = (status: string): string => {
-    switch (status) {
-      case 'queued':
-      case 'pending':
-        return 'status-pill-queued';
-      case 'running':
-        return 'status-pill-running';
-      case 'finished':
-        return 'status-pill-finished';
-      case 'blocked':
-      case 'paused':
-        return 'status-pill-blocked';
-      case 'failed':
-      case 'cancelled':
-      case 'expired':
-        return 'status-pill-failed';
-      case 'loading':
-        return 'status-pill-loading';
-      default:
-        return 'status-pill-unknown';
-    }
-  };
-
-  const displayStatus = status === 'loading' ? '...' : status;
-
-  return (
-    <span className={`status-pill ${getStatusClass(status)}`}>
-      {isPolling && status === 'running' && (
-        <span className="status-pill-spinner" />
-      )}
-      <span className="status-pill-type">{type}:</span>
-      <span className="status-pill-status">{displayStatus}</span>
-    </span>
   );
 }

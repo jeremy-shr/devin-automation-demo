@@ -37,6 +37,7 @@ export function IssueRow({ issue }: IssueRowProps) {
   const [error, setError] = useState<string | null>(null);
   const [scopeOutput, setScopeOutput] = useState<Record<string, unknown> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [clarifications, setClarifications] = useState('');
 
   // Load persisted sessions on mount
   useEffect(() => {
@@ -103,7 +104,10 @@ export function IssueRow({ issue }: IssueRowProps) {
       const response = await fetch(`/api/issues/${issue.number}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scopeSessionId: scopeSession.sessionId }),
+        body: JSON.stringify({ 
+          scopeSessionId: scopeSession.sessionId,
+          clarifications: clarifications.trim() || undefined,
+        }),
       });
       const data = await response.json();
       
@@ -123,7 +127,7 @@ export function IssueRow({ issue }: IssueRowProps) {
     } finally {
       setIsLoading(null);
     }
-  }, [issue.number, sessions]);
+  }, [issue.number, sessions, clarifications]);
 
   const handleScopeOutput = useCallback((output: Record<string, unknown> | null) => {
     setScopeOutput(output);
@@ -132,7 +136,7 @@ export function IssueRow({ issue }: IssueRowProps) {
   const hasScopeSession = sessions.some(s => s.type === 'scope');
   const hasExecuteSession = sessions.some(s => s.type === 'execute');
   const isReadyToExecute = scopeOutput && 
-    ('ready_to_execute' in scopeOutput ? scopeOutput.ready_to_execute : true);
+    ('ready_to_execute' in scopeOutput ? Boolean(scopeOutput.ready_to_execute) : true);
 
   return (
     <div className="issue-row">
@@ -229,6 +233,20 @@ export function IssueRow({ issue }: IssueRowProps) {
       
       {isExpanded && sessions.length > 0 && (
         <div className="sessions-panel">
+          {isReadyToExecute && !hasExecuteSession && (
+            <div className="clarifications-box">
+              <label className="clarifications-label">
+                Add constraints or clarifications (optional)
+              </label>
+              <textarea
+                className="clarifications-input"
+                value={clarifications}
+                onChange={(e) => setClarifications(e.target.value)}
+                placeholder="Keep PR under 150 LOC"
+                rows={2}
+              />
+            </div>
+          )}
           {sessions.map(session => (
             <SessionStatus
               key={session.sessionId}

@@ -20,7 +20,7 @@ export async function POST(
     
     // Parse request body
     const body = await request.json().catch(() => ({}));
-    const { scopeSessionId } = body;
+    const { scopeSessionId, clarifications } = body;
     
     if (!scopeSessionId) {
       return NextResponse.json(
@@ -58,6 +58,11 @@ export async function POST(
     const { owner, repo } = getRepoInfo();
     const baseBranch = process.env.GITHUB_BASE_BRANCH || 'main';
     
+    // Build clarifications section if provided
+    const clarificationsSection = clarifications 
+      ? `\n## Additional Constraints/Clarifications\n\n${clarifications}\n`
+      : '';
+    
     // Construct the execute prompt
     const prompt = `# Task: Execute Action Plan for GitHub Issue #${issueNumber}
 
@@ -72,7 +77,7 @@ ${issue.body || 'No description provided.'}
 ## Action Plan from Scoping Session
 
 ${actionPlanText}
-
+${clarificationsSection}
 ## Your Task
 
 You are an expert software engineer. Execute the action plan above to resolve this GitHub issue.

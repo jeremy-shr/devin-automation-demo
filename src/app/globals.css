@@ -1126,37 +1126,124 @@ body {
   border-color: var(--border-color);
 }
 
-.status-strip-blocked {
+/* Workflow-based status pill styles */
+.status-pill-pending {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.status-pill-active {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent-blue);
+  border-color: rgba(88, 166, 255, 0.3);
+}
+
+.status-pill-success {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+  border-color: rgba(63, 185, 80, 0.3);
+}
+
+.status-pill-warning {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
+  border-color: rgba(210, 153, 34, 0.3);
+}
+
+.status-pill-error {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
+  border-color: rgba(248, 81, 73, 0.3);
+}
+
+.status-pill-attention {
+  margin-left: 0.25rem;
+  font-size: 0.7rem;
+}
+
+/* Status badge (SessionStatus component) workflow styles */
+.status-badge-pending {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}
+
+.status-badge-active {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent-blue);
+  border-color: rgba(88, 166, 255, 0.3);
+}
+
+.status-badge-success {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--accent-green);
+  border-color: rgba(63, 185, 80, 0.3);
+}
+
+.status-badge-warning {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--accent-yellow);
+  border-color: rgba(210, 153, 34, 0.3);
+}
+
+.status-badge-error {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
+  border-color: rgba(248, 81, 73, 0.3);
+}
+
+.status-badge-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 0.375rem;
+}
+
+.status-badge-attention {
+  margin-left: 0.25rem;
+  font-size: 0.7rem;
+}
+
+.status-strip-blocked,
+.status-strip-attention {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.5rem;
-  background: rgba(248, 81, 73, 0.15);
-  border: 1px solid rgba(248, 81, 73, 0.3);
+  background: rgba(210, 153, 34, 0.15);
+  border: 1px solid rgba(210, 153, 34, 0.3);
   border-radius: 4px;
-  color: var(--accent-red);
+  color: var(--accent-yellow);
   font-size: 0.75rem;
   font-weight: 500;
 }
 
-.blocked-icon {
+.blocked-icon,
+.attention-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 14px;
   height: 14px;
-  background: var(--accent-red);
-  color: white;
+  background: var(--accent-yellow);
+  color: var(--bg-primary);
   border-radius: 50%;
   font-size: 0.65rem;
   font-weight: 700;
 }
 
-.blocked-text {
+.blocked-text,
+.attention-text {
   font-weight: 600;
 }
 
-.blocked-reason {
+.blocked-reason,
+.attention-detail {
   color: var(--text-secondary);
   font-weight: 400;
   max-width: 200px;
@@ -1165,10 +1252,59 @@ body {
   white-space: nowrap;
 }
 
+/* Session detail message */
+.session-detail {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: rgba(63, 185, 80, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid var(--accent-green);
+}
+
 .status-strip-updated {
   color: var(--text-muted);
   font-size: 0.7rem;
   margin-left: auto;
+}
+
+/* Clarifications Box */
+.clarifications-box {
+  padding: 1rem 1.25rem;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
+.clarifications-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.clarifications-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color 0.2s;
+}
+
+.clarifications-input::placeholder {
+  color: var(--text-muted);
+}
+
+.clarifications-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
 }
 
 /* Responsive */
