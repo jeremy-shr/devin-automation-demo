@@ -31,6 +31,10 @@ export interface GitHubIssue {
     color: string;
   }>;
   state: string;
+  user: {
+    login: string;
+    avatar_url: string;
+  } | null;
 }
 
 export type IssueState = 'open' | 'closed' | 'all';
@@ -66,6 +70,10 @@ export async function listIssues(state: IssueState = 'open'): Promise<GitHubIssu
           color: label.color || 'gray',
         })),
       state: issue.state,
+      user: issue.user ? {
+        login: issue.user.login,
+        avatar_url: issue.user.avatar_url,
+      } : null,
     }));
 }
 
@@ -96,6 +104,10 @@ export async function getIssue(issueNumber: number): Promise<GitHubIssue> {
         color: label.color || 'gray',
       })),
     state: issue.state,
+    user: issue.user ? {
+      login: issue.user.login,
+      avatar_url: issue.user.avatar_url,
+    } : null,
   };
 }
 

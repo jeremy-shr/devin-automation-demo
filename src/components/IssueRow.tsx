@@ -13,6 +13,7 @@ interface Issue {
   updated_at: string;
   labels: Array<{ name: string; color: string }>;
   state: string;
+  user: { login: string; avatar_url: string } | null;
 }
 
 interface SessionInfo {
@@ -52,9 +53,10 @@ export function IssueRow({ issue }: IssueRowProps) {
     
     if (loadedSessions.length > 0) {
       setSessions(loadedSessions);
-      setIsExpanded(true);
+      // Default to collapsed for closed issues, expanded for open issues
+      setIsExpanded(issue.state !== 'closed');
     }
-  }, [issue.number]);
+  }, [issue.number, issue.state]);
 
   const handleScope = useCallback(async () => {
     setIsLoading('scope');
@@ -168,6 +170,9 @@ export function IssueRow({ issue }: IssueRowProps) {
           
           <div className="issue-meta">
             Updated {new Date(issue.updated_at).toLocaleDateString()}
+            {issue.user && (
+              <span className="issue-author"> • Requested by {issue.user.login}</span>
+            )}
           </div>
         </div>
         

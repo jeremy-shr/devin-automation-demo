@@ -15,6 +15,7 @@ interface Issue {
   updated_at: string;
   labels: Array<{ name: string; color: string }>;
   state: string;
+  user: { login: string; avatar_url: string } | null;
 }
 
 interface ConfigStatus {
