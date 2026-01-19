@@ -275,6 +275,40 @@ body {
   border-color: var(--accent-blue);
 }
 
+/* State toggle */
+.state-toggle {
+  display: flex;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.state-toggle-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-right: 1px solid var(--border-color);
+}
+
+.state-toggle-button:last-child {
+  border-right: none;
+}
+
+.state-toggle-button:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.state-toggle-button.active {
+  background: var(--accent-blue);
+  color: white;
+}
+
 /* Issue row */
 .issue-row {
   background: var(--bg-secondary);
@@ -323,6 +357,15 @@ body {
 .issue-title:hover {
   color: var(--accent-blue);
   text-decoration: underline;
+}
+
+.issue-title-closed {
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.issue-title-closed:hover {
+  color: var(--accent-purple);
 }
 
 .issue-labels {

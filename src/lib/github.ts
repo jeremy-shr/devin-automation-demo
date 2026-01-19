@@ -33,14 +33,16 @@ export interface GitHubIssue {
   state: string;
 }
 
-export async function listIssues(): Promise<GitHubIssue[]> {
+export type IssueState = 'open' | 'closed' | 'all';
+
+export async function listIssues(state: IssueState = 'open'): Promise<GitHubIssue[]> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoConfig();
   
   const response = await octokit.rest.issues.listForRepo({
     owner,
     repo,
-    state: 'open',
+    state,
     per_page: 50,
     sort: 'updated',
     direction: 'desc',

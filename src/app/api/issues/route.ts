@@ -1,9 +1,17 @@
-import { NextResponse } from 'next/server';
-import { listIssues } from '@/lib/github';
+import { NextRequest, NextResponse } from 'next/server';
+import { listIssues, IssueState } from '@/lib/github';
 
-export async function GET() {
+const VALID_STATES: IssueState[] = ['open', 'closed', 'all'];
+
+export async function GET(request: NextRequest) {
   try {
-    const issues = await listIssues();
+    const { searchParams } = new URL(request.url);
+    const stateParam = searchParams.get('state');
+    const state: IssueState = stateParam && VALID_STATES.includes(stateParam as IssueState)
+      ? (stateParam as IssueState)
+      : 'open';
+    
+    const issues = await listIssues(state);
     
     // Return issues with body snippet
     const issuesWithSnippet = issues.map(issue => ({
