@@ -137,11 +137,14 @@ export function IssueRow({ issue }: IssueRowProps) {
         <div className="issue-info">
           <div className="issue-header">
             <span className="issue-number">#{issue.number}</span>
+            {issue.state === 'closed' && (
+              <span className="state-badge state-closed">Closed</span>
+            )}
             <a 
               href={issue.html_url} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="issue-title"
+              className={`issue-title ${issue.state === 'closed' ? 'issue-title-closed' : ''}`}
             >
               {issue.title}
             </a>

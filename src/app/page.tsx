@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { IssueRow } from '@/components/IssueRow';
+
+type IssueState = 'open' | 'closed' | 'all';
 
 interface Issue {
   number: number;
@@ -22,13 +25,25 @@ interface ConfigStatus {
   repoName?: string;
 }
 
-export default function Home() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const getInitialState = (): IssueState => {
+    const stateParam = searchParams.get('state');
+    if (stateParam === 'open' || stateParam === 'closed' || stateParam === 'all') {
+      return stateParam;
+    }
+    return 'open';
+  };
+
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [configStatus] = useState<ConfigStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLabel, setSelectedLabel] = useState('');
+  const [stateFilter, setStateFilter] = useState<IssueState>(getInitialState);
 
   const uniqueLabels = useMemo(() => {
     const labelSet = new Set<string>();
@@ -58,12 +73,24 @@ export default function Home() {
 
   const hasActiveFilters = searchQuery !== '' || selectedLabel !== '';
 
+  const handleStateChange = useCallback((newState: IssueState) => {
+    setStateFilter(newState);
+    const params = new URLSearchParams(searchParams.toString());
+    if (newState === 'open') {
+      params.delete('state');
+    } else {
+      params.set('state', newState);
+    }
+    const newUrl = params.toString() ? `?${params.toString()}` : '/';
+    router.push(newUrl);
+  }, [searchParams, router]);
+
   const fetchIssues = useCallback(async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetch('/api/issues');
+      const response = await fetch(`/api/issues?state=${stateFilter}`);
       const data = await response.json();
       
       if (!response.ok) {
@@ -76,7 +103,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [stateFilter]);
 
   useEffect(() => {
     fetchIssues();
@@ -139,8 +166,8 @@ export default function Home() {
         
         {!loading && !error && issues.length === 0 && (
           <div className="empty-state">
-            <h3>📭 No Open Issues</h3>
-            <p>There are no open issues in the configured repository.</p>
+            <h3>📭 No {stateFilter === 'all' ? '' : stateFilter.charAt(0).toUpperCase() + stateFilter.slice(1) + ' '}Issues</h3>
+            <p>There are no {stateFilter === 'all' ? '' : stateFilter + ' '}issues in the configured repository.</p>
           </div>
         )}
         
@@ -151,6 +178,26 @@ export default function Home() {
                 {filteredIssues.length} of {issues.length} issue{issues.length !== 1 ? 's' : ''}
               </span>
               <div className="filter-controls">
+                <div className="state-toggle">
+                  <button
+                    className={`state-toggle-button ${stateFilter === 'open' ? 'active' : ''}`}
+                    onClick={() => handleStateChange('open')}
+                  >
+                    Open
+                  </button>
+                  <button
+                    className={`state-toggle-button ${stateFilter === 'closed' ? 'active' : ''}`}
+                    onClick={() => handleStateChange('closed')}
+                  >
+                    Closed
+                  </button>
+                  <button
+                    className={`state-toggle-button ${stateFilter === 'all' ? 'active' : ''}`}
+                    onClick={() => handleStateChange('all')}
+                  >
+                    All
+                  </button>
+                </div>
                 <input
                   type="text"
                   placeholder="Search by title or #number..."
@@ -205,5 +252,20 @@ export default function Home() {
         </p>
       </footer>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="container">
+        <div className="loading-state">
+          <div className="loading-spinner large" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   );
 }
